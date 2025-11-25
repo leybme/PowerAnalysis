@@ -6,10 +6,8 @@ Desktop Tkinter + Matplotlib tool to explore power traces from CSV, apply a movi
 
 ```bash
 python -m pip install --upgrade pip
-python -m pip install numpy matplotlib pillow
+python -m pip install numpy matplotlib tk
 ```
-
-> Pillow is only needed for clipboard image support; the app works without it.
 
 ## Run
 
@@ -18,6 +16,10 @@ python power_analysis_app.py
 ```
 
 The app auto-loads `samplefile.csv` if present. Otherwise, click **Load CSV**.
+
+## Screenshot
+
+![App overview](appscreenshot1.png)
 
 ## Data flow
 
