@@ -4,6 +4,7 @@ import io
 import ctypes
 import tkinter as tk
 from tkinter import filedialog, messagebox, ttk
+import csv
 
 import numpy as np
 from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg
@@ -220,11 +221,21 @@ class PowerAnalysisApp:
 
     def _load_csv(self, path):
         try:
-            data = np.loadtxt(path, delimiter=",", skiprows=1)
-            if data.ndim != 2 or data.shape[1] < 2:
-                raise ValueError("CSV must have at least two columns.")
-            time = data[:, 0]
-            power = data[:, 1]
+            headers, data = self._read_csv_numeric(path)
+            num_cols = data.shape[1]
+            if num_cols < 2:
+                raise ValueError("CSV must have at least two numeric columns.")
+
+            time_idx, power_idx = 0, 1
+            if num_cols > 2:
+                selection = self._prompt_column_selection(headers)
+                if selection is None:
+                    messagebox.showinfo("Cancelled", "Load cancelled; no columns selected.")
+                    return
+                time_idx, power_idx = selection
+
+            time = data[:, time_idx]
+            power = data[:, power_idx]
             mask = np.isfinite(time) & np.isfinite(power)
             if not np.any(mask):
                 raise ValueError("No finite samples found in CSV.")
@@ -235,6 +246,94 @@ class PowerAnalysisApp:
             self._apply_filter()
         except Exception as exc:
             messagebox.showerror("Error", f"Failed to load CSV: {exc}")
+
+    def _read_csv_numeric(self, path):
+        """
+        Load CSV data as floats. If the first row is non-numeric, treat it as a header.
+        Returns (headers, data_array).
+        """
+        with open(path, newline="") as f:
+            reader = csv.reader(f)
+            first_row = next(reader, [])
+        if not first_row:
+            raise ValueError("CSV is empty.")
+
+        num_cols = len(first_row)
+
+        def _row_is_numeric(row):
+            try:
+                [float(x) for x in row]
+                return True
+            except Exception:
+                return False
+
+        first_row_is_data = _row_is_numeric(first_row)
+        headers = (
+            [f"Col {i+1}" for i in range(num_cols)]
+            if first_row_is_data
+            else [h.strip() or f"Col {i+1}" for i, h in enumerate(first_row)]
+        )
+
+        skiprows = 0 if first_row_is_data else 1
+        data = np.loadtxt(path, delimiter=",", skiprows=skiprows)
+        data = np.asarray(data, dtype=float)
+        try:
+            data = data.reshape(-1, num_cols)
+        except Exception:
+            raise ValueError("CSV rows have inconsistent column counts.")
+        return headers, data
+
+    def _prompt_column_selection(self, headers):
+        """
+        Ask the user to pick time and power columns when a CSV has >2 columns.
+        Returns (time_idx, power_idx) or None if cancelled.
+        """
+        top = tk.Toplevel(self.root)
+        top.title("Select columns")
+        top.transient(self.root)
+        top.grab_set()
+
+        options = [f"{i+1}: {name}" for i, name in enumerate(headers)]
+        time_var = tk.StringVar(value=options[0])
+        power_var = tk.StringVar(value=options[1] if len(options) > 1 else options[0])
+        result = {"value": None}
+
+        ttk.Label(top, text="Time column:").grid(row=0, column=0, padx=6, pady=6, sticky="w")
+        ttk.OptionMenu(top, time_var, time_var.get(), *options).grid(
+            row=0, column=1, padx=6, pady=6, sticky="ew"
+        )
+        ttk.Label(top, text="Power column:").grid(row=1, column=0, padx=6, pady=6, sticky="w")
+        ttk.OptionMenu(top, power_var, power_var.get(), *options).grid(
+            row=1, column=1, padx=6, pady=6, sticky="ew"
+        )
+
+        def parse_idx(val):
+            try:
+                return int(val.split(":")[0]) - 1
+            except Exception:
+                return 0
+
+        def on_ok():
+            t_idx = parse_idx(time_var.get())
+            p_idx = parse_idx(power_var.get())
+            if t_idx == p_idx:
+                messagebox.showerror("Error", "Time and power columns must differ.")
+                return
+            result["value"] = (t_idx, p_idx)
+            top.destroy()
+
+        def on_cancel():
+            result["value"] = None
+            top.destroy()
+
+        btn_frame = ttk.Frame(top)
+        btn_frame.grid(row=2, column=0, columnspan=2, pady=8)
+        ttk.Button(btn_frame, text="OK", command=on_ok).pack(side="left", padx=6)
+        ttk.Button(btn_frame, text="Cancel", command=on_cancel).pack(side="left", padx=6)
+
+        top.columnconfigure(1, weight=1)
+        self.root.wait_window(top)
+        return result["value"]
 
     def _apply_filter(self):
         if self.power.size == 0:
