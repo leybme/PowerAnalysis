@@ -186,15 +186,15 @@ class PowerAnalysisApp:
             row=1, column=0, sticky="nsew", padx=4, pady=4
         )
 
-        # Event buttons placed below the summary chart
-        self.event_list_container = ttk.Frame(events_frame)
-        self.event_list_container.grid(row=2, column=0, sticky="ew", pady=(2, 0))
-        self.event_buttons = []
-
-        # Average stats label for all events
+        # Average stats label for all events (above the buttons)
         self.event_avg_var = tk.StringVar(value="")
         self.event_avg_label = ttk.Label(events_frame, textvariable=self.event_avg_var)
-        self.event_avg_label.grid(row=3, column=0, sticky="ew", padx=4, pady=(4, 2))
+        self.event_avg_label.grid(row=2, column=0, sticky="ew", padx=4, pady=(4, 2))
+
+        # Event buttons placed below the summary chart
+        self.event_list_container = ttk.Frame(events_frame)
+        self.event_list_container.grid(row=3, column=0, sticky="ew", pady=(2, 0))
+        self.event_buttons = []
 
     def _labeled_entry(self, parent, label, default, row, col):
         frame = ttk.Frame(parent)
@@ -287,7 +287,13 @@ class PowerAnalysisApp:
         self._autoscale_main_y()
 
         if self.span_selector:
+            # Clear any existing span visuals before wiring a fresh selector.
+            try:
+                self.span_selector.clear()
+            except Exception:
+                pass
             self.span_selector.disconnect_events()
+            self.span_selector = None
         self._clear_preview_selection()
         self.span_selector = SpanSelector(
             self.ax_preview,
@@ -327,6 +333,11 @@ class PowerAnalysisApp:
         self.canvas.draw_idle()
 
     def _clear_preview_selection(self):
+        if self.span_selector:
+            try:
+                self.span_selector.clear()
+            except Exception:
+                pass
         # Remove any lingering selection shading from the overview plot.
         for patch in list(self.ax_preview.patches):
             try:
