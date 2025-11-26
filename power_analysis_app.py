@@ -191,6 +191,11 @@ class PowerAnalysisApp:
         self.event_list_container.grid(row=2, column=0, sticky="ew", pady=(2, 0))
         self.event_buttons = []
 
+        # Average stats label for all events
+        self.event_avg_var = tk.StringVar(value="")
+        self.event_avg_label = ttk.Label(events_frame, textvariable=self.event_avg_var)
+        self.event_avg_label.grid(row=3, column=0, sticky="ew", padx=4, pady=(4, 2))
+
     def _labeled_entry(self, parent, label, default, row, col):
         frame = ttk.Frame(parent)
         frame.grid(row=row, column=col, padx=2, pady=2, sticky="ew")
@@ -586,6 +591,7 @@ class PowerAnalysisApp:
         for btn in self.event_buttons:
             btn.destroy()
         self.event_buttons = []
+        self.event_avg_var.set("")
         self.ax_event.cla()
         self.ax_event.set_title("Events summary (avg power vs length)")
         self.ax_event.set_xlabel("Length (s)")
@@ -609,6 +615,7 @@ class PowerAnalysisApp:
         self.event_buttons = []
 
         if not self.events:
+            self.event_avg_var.set("")
             self.ax_main.figure.canvas.draw_idle()
             return
 
@@ -657,6 +664,14 @@ class PowerAnalysisApp:
 
             btn.grid(row=idx // 1, column=0, padx=2, pady=2, sticky="ew")
             self.event_buttons.append(btn)
+
+        # Calculate and display average stats for all events
+        avg_power = np.mean([ev['avg_power'] for ev in self.events])
+        avg_duration = np.mean([ev['duration'] for ev in self.events])
+        avg_energy = np.mean([ev['energy_mj'] for ev in self.events])
+        self.event_avg_var.set(
+            f"Avg: Power: {avg_power:.2f}mW | Length: {avg_duration:.6f}s | Energy: {avg_energy:.3f}mJ"
+        )
 
         self.ax_main.figure.canvas.draw_idle()
         self._plot_event_summary()
