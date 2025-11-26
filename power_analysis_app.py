@@ -24,6 +24,9 @@ class PowerAnalysisApp:
         self.events = []
         self.last_threshold = None
 
+        # Loaded file name
+        self.loaded_file_name = None
+
         # Chart objects
         self.preview_line = None
         self.main_line = None
@@ -101,6 +104,10 @@ class PowerAnalysisApp:
 
         ttk.Button(load_frame, text="Load CSV", command=self._prompt_load).grid(
             row=0, column=0, padx=(4, 4), pady=4, sticky="w"
+        )
+        self.file_name_var = tk.StringVar(value="")
+        ttk.Label(load_frame, textvariable=self.file_name_var).grid(
+            row=1, column=0, columnspan=6, padx=(4, 4), pady=(0, 4), sticky="w"
         )
         ttk.Label(load_frame, text="Avg window (samples)").grid(
             row=0, column=1, padx=4, pady=4, sticky="e"
@@ -218,6 +225,8 @@ class PowerAnalysisApp:
                 raise ValueError("No finite samples found in CSV.")
             self.time = time[mask]
             self.power = power[mask]
+            self.loaded_file_name = os.path.basename(path)
+            self.file_name_var.set(self.loaded_file_name)
             self._apply_filter()
         except Exception as exc:
             messagebox.showerror("Error", f"Failed to load CSV: {exc}")
