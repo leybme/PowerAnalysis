@@ -24,6 +24,7 @@ class PowerAnalysisApp:
         self.selected_range = None
         self.events = []
         self.last_threshold = None
+        self.last_threshold2 = None
 
         # Loaded file name
         self.loaded_file_name = None
@@ -147,8 +148,8 @@ class PowerAnalysisApp:
         self.threshold_entry = self._labeled_entry(
             detect_frame, "Threshold", "10", 1, 0
         )
-        self.range_entry = self._labeled_entry(
-            detect_frame, "Range (mW)", "10", 1, 1
+        self.threshold2_entry = self._labeled_entry(
+            detect_frame, "Threshold2 (mW)", "20", 1, 1
         )
         self.min_len_entry = self._labeled_entry(
             detect_frame, "Min length (s)", "0", 1, 2
@@ -486,7 +487,7 @@ class PowerAnalysisApp:
             return
         try:
             threshold = float(self.threshold_entry.get())
-            rng = float(self.range_entry.get())
+            threshold2 = float(self.threshold2_entry.get())
             min_len = float(self.min_len_entry.get())
             max_len = float(self.max_len_entry.get())
             max_events = max(1, int(self.max_events_entry.get()))
@@ -494,8 +495,19 @@ class PowerAnalysisApp:
             messagebox.showerror("Error", "Please enter numeric detection parameters.")
             return
 
+        mode = self.detect_mode.get()
+        if mode == "falling" and threshold2 > threshold:
+            # In falling mode ensure secondary threshold is below the primary; swap if needed.
+            threshold, threshold2 = threshold2, threshold
+            for entry, val in (
+                (self.threshold_entry, threshold),
+                (self.threshold2_entry, threshold2),
+            ):
+                entry.delete(0, tk.END)
+                entry.insert(0, f"{val:g}")
+
         self.last_threshold = threshold
-        rng = max(0.0, rng)
+        self.last_threshold2 = threshold2
         min_len = max(0.0, min_len)
         max_len = float("inf") if max_len <= 0 else max_len
         max_events = max(1, max_events)
@@ -508,8 +520,10 @@ class PowerAnalysisApp:
         data = self.filtered_power
         trough = np.inf
         trough_idx = 0
-        mode = self.detect_mode.get()
         reached_target = False
+        # Secondary threshold is used as the target for rising (>=) and falling (<=) modes.
+        target_up = threshold2
+        target_down = threshold2
 
         for i in range(1, len(data)):
             val = data[i]
@@ -550,12 +564,12 @@ class PowerAnalysisApp:
                                     events.append(ev)
                             in_event = False
                     elif mode == "rising":
-                        if val >= threshold + rng:
+                        if val >= target_up:
                             end_idx = i
                             duration = self.time[end_idx] - self.time[start_idx]
                             reached_target = True
                             length_ok = duration >= min_len and duration <= max_len
-                            if peak >= (threshold + rng) and length_ok:
+                            if peak >= target_up and length_ok:
                                 ev = self._build_event(start_idx, end_idx, peak, peak_idx)
                                 if ev:
                                     events.append(ev)
@@ -574,11 +588,11 @@ class PowerAnalysisApp:
                     if duration_now > max_len:
                         in_event = False  # timeout
                         continue
-                    if val >= threshold and trough > threshold - rng:
+                    if val >= threshold and trough > target_down:
                         # Recovered before enough drop; abort.
                         in_event = False
                         continue
-                    if val <= threshold - rng:
+                    if val <= target_down:
                         end_idx = i
                         duration = self.time[end_idx] - self.time[start_idx]
                         length_ok = duration >= min_len and duration <= max_len
@@ -901,6 +915,22 @@ class PowerAnalysisApp:
             self.threshold_entry.get()
         )
         ax.axhline(threshold, color="#555", linestyle=":", lw=1.0, label="Threshold")
+        try:
+            threshold2 = (
+                self.last_threshold2
+                if self.last_threshold2 is not None
+                else float(self.threshold2_entry.get())
+            )
+        except Exception:
+            threshold2 = None
+        if threshold2 is not None:
+            ax.axhline(
+                threshold2,
+                color="#777",
+                linestyle="--",
+                lw=1.0,
+                label="Threshold2",
+            )
         ax.legend(loc="upper right", fontsize=8)
         ax.set_xlabel("Time (s)")
         ax.set_ylabel("Power (mW)")
