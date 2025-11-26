@@ -113,7 +113,7 @@ class PowerAnalysisApp:
             row=0, column=1, padx=4, pady=4, sticky="e"
         )
         self.filter_entry = ttk.Entry(load_frame, width=8)
-        self.filter_entry.insert(0, "0")
+        self.filter_entry.insert(0, "25")
         self.filter_entry.grid(row=0, column=2, padx=4, pady=4, sticky="w")
         ttk.Button(load_frame, text="Apply Filter", command=self._apply_filter).grid(
             row=0, column=3, padx=4, pady=4, sticky="e"
