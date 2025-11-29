@@ -217,12 +217,34 @@ class PowerAnalysisApp:
         """Toggle threshold2_entry state based on detection mode.
         
         Disable threshold2 when mode is 'threshold', enable for 'rising'/'falling'.
+        Additionally, for 'falling' mode, swap threshold values if threshold2 > threshold
+        to ensure the secondary threshold is below the primary.
+        For 'rising' mode, swap threshold values if threshold2 < threshold
+        to ensure the secondary threshold is above the primary.
         """
         mode = self.detect_mode.get()
         if mode == "threshold":
             self.threshold2_entry.configure(state="disabled")
         else:
             self.threshold2_entry.configure(state="normal")
+            try:
+                threshold = float(self.threshold_entry.get())
+                threshold2 = float(self.threshold2_entry.get())
+                should_swap = False
+                # For falling mode, swap if threshold2 > threshold
+                if mode == "falling" and threshold2 > threshold:
+                    should_swap = True
+                # For rising mode, swap if threshold2 < threshold
+                elif mode == "rising" and threshold2 < threshold:
+                    should_swap = True
+                if should_swap:
+                    self.threshold_entry.delete(0, tk.END)
+                    self.threshold_entry.insert(0, f"{threshold2:g}")
+                    self.threshold2_entry.delete(0, tk.END)
+                    self.threshold2_entry.insert(0, f"{threshold:g}")
+            except ValueError:
+                # If values are not valid numbers, skip the swap
+                pass
 
     def _load_default_file(self):
         default_path = os.path.join(os.getcwd(), "detection_mode_sample.csv")
