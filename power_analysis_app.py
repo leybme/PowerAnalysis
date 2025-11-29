@@ -151,6 +151,12 @@ class PowerAnalysisApp:
         self.threshold2_entry = self._labeled_entry(
             detect_frame, "Threshold2 (mW)", "20", 1, 1
         )
+
+        # Add trace to toggle threshold2_entry state based on detection mode
+        self.detect_mode.trace_add("write", self._on_detect_mode_change)
+        # Set initial state (threshold mode disables threshold2)
+        self._on_detect_mode_change()
+
         self.min_len_entry = self._labeled_entry(
             detect_frame, "Min length (s)", "0", 1, 2
         )
@@ -206,6 +212,17 @@ class PowerAnalysisApp:
         entry.insert(0, default)
         entry.pack(fill="x")
         return entry
+
+    def _on_detect_mode_change(self, *args):
+        """Toggle threshold2_entry state based on detection mode.
+        
+        Disable threshold2 when mode is 'threshold', enable for 'rising'/'falling'.
+        """
+        mode = self.detect_mode.get()
+        if mode == "threshold":
+            self.threshold2_entry.configure(state="disabled")
+        else:
+            self.threshold2_entry.configure(state="normal")
 
     def _load_default_file(self):
         default_path = os.path.join(os.getcwd(), "detection_mode_sample.csv")
