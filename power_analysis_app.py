@@ -232,9 +232,9 @@ class PowerAnalysisApp:
                     threshold2 = float(self.threshold2_entry.get())
                     if threshold2 > threshold:
                         # Swap values so threshold2 is below threshold
-                        self.threshold_entry.delete(0, "end")
+                        self.threshold_entry.delete(0, tk.END)
                         self.threshold_entry.insert(0, f"{threshold2:g}")
-                        self.threshold2_entry.delete(0, "end")
+                        self.threshold2_entry.delete(0, tk.END)
                         self.threshold2_entry.insert(0, f"{threshold:g}")
                 except ValueError:
                     # If values are not valid numbers, skip the swap
