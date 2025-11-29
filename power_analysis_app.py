@@ -199,9 +199,38 @@ class PowerAnalysisApp:
         self.event_avg_label = ttk.Label(events_frame, textvariable=self.event_avg_var)
         self.event_avg_label.grid(row=2, column=0, sticky="ew", padx=4, pady=(4, 2))
 
-        # Event buttons placed below the summary chart
-        self.event_list_container = ttk.Frame(events_frame)
-        self.event_list_container.grid(row=3, column=0, sticky="ew", pady=(2, 0))
+        # Scrollable list for event buttons (handles many events without stretching the window)
+        events_frame.rowconfigure(3, weight=1)
+        self.event_list_outer = ttk.Frame(events_frame)
+        self.event_list_outer.grid(row=3, column=0, sticky="nsew", padx=4, pady=(2, 4))
+        self.event_list_outer.rowconfigure(0, weight=1)
+        self.event_list_outer.columnconfigure(0, weight=1)
+
+        self.event_list_canvas = tk.Canvas(self.event_list_outer, highlightthickness=0)
+        self.event_list_canvas.grid(row=0, column=0, sticky="nsew")
+        self.event_list_scrollbar = ttk.Scrollbar(
+            self.event_list_outer, orient="vertical", command=self.event_list_canvas.yview
+        )
+        self.event_list_scrollbar.grid(row=0, column=1, sticky="ns")
+        self.event_list_canvas.configure(yscrollcommand=self.event_list_scrollbar.set)
+
+        self.event_list_container = ttk.Frame(self.event_list_canvas)
+        self.event_list_container.columnconfigure(0, weight=1)
+        self.event_list_window = self.event_list_canvas.create_window(
+            (0, 0), window=self.event_list_container, anchor="nw"
+        )
+        self.event_list_container.bind(
+            "<Configure>",
+            lambda e: self.event_list_canvas.configure(
+                scrollregion=self.event_list_canvas.bbox("all")
+            ),
+        )
+        self.event_list_canvas.bind(
+            "<Configure>",
+            lambda e: self.event_list_canvas.itemconfigure(
+                self.event_list_window, width=e.width
+            ),
+        )
         self.event_buttons = []
 
     def _labeled_entry(self, parent, label, default, row, col):
@@ -754,6 +783,7 @@ class PowerAnalysisApp:
         for btn in self.event_buttons:
             btn.destroy()
         self.event_buttons = []
+        self.event_list_canvas.yview_moveto(0)
         self.event_avg_var.set("")
         self.ax_event.cla()
         self.ax_event.set_title("Events summary (avg power vs length)")
@@ -780,6 +810,7 @@ class PowerAnalysisApp:
         if not self.events:
             self.event_avg_var.set("")
             self.ax_main.figure.canvas.draw_idle()
+            self.event_list_canvas.yview_moveto(0)
             return
 
         for idx, ev in enumerate(self.events):
@@ -827,6 +858,8 @@ class PowerAnalysisApp:
 
             btn.grid(row=idx // 1, column=0, padx=2, pady=2, sticky="ew")
             self.event_buttons.append(btn)
+
+        self.event_list_canvas.yview_moveto(0)
 
         # Calculate and display average stats for all events
         avg_power = np.mean([ev['avg_power'] for ev in self.events])
