@@ -43,6 +43,29 @@ Use the Data panel `Max events` input to cap detected events per run.
 - Event summary: scatter of average power vs length (s); buttons below match event colors.
 - Event zoom: shaded window with start/end/threshold markers plus a stats table; copy stats to clipboard for Excel.
 
+## Detection profiles
+
+Create a `profile.json` next to `power_analysis_app.py` to quickly load presets for mode/thresholds/lengths. The app reads either a top-level array or `{ "profiles": [ ... ] }`.
+
+```json
+[
+  {
+    "name": "Threshold Default",
+    "mode": "threshold",
+    "threshold1": 10,
+    "threshold2": 20,
+    "min_len": 0,
+    "max_len": 100
+  }
+]
+```
+
+Notes:
+- `mode` must be one of `threshold`, `rising`, or `falling`.
+- `threshold1` maps to the primary threshold; `threshold2` is the secondary level for rising/falling.
+- `min_len` and `max_len` are seconds; set `max_len` to `0` or omit to treat it as “no upper limit”.
+- The first profile is auto-applied on launch; pick others from the Profile dropdown next to Mode.
+
 ## Authors
 
 Y Nguyen and ChatGPT Codex

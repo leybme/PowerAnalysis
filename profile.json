@@ -1,0 +1,26 @@
+[
+  {
+    "name": "Threshold Default",
+    "mode": "threshold",
+    "threshold1": 10,
+    "threshold2": 20,
+    "min_len": 0,
+    "max_len": 100
+  },
+  {
+    "name": "Short Rising",
+    "mode": "rising",
+    "threshold1": 15,
+    "threshold2": 30,
+    "min_len": 0.05,
+    "max_len": 2
+  },
+  {
+    "name": "Long Falling",
+    "mode": "falling",
+    "threshold1": 25,
+    "threshold2": 12,
+    "min_len": 0.5,
+    "max_len": 10
+  }
+]

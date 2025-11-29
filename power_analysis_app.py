@@ -2,6 +2,7 @@ import os
 import tempfile
 import io
 import ctypes
+import json
 import tkinter as tk
 from tkinter import filedialog, messagebox, ttk
 import csv
@@ -49,6 +50,8 @@ class PowerAnalysisApp:
             "#7f7f7f",
             "#bcbd22",
         ]
+        self.profiles = []
+        self.profiles_by_name = {}
 
         self._build_layout()
         self._load_default_file()
@@ -100,6 +103,9 @@ class PowerAnalysisApp:
         )
 
     def _build_controls(self, parent):
+        self.profiles = self._load_profiles()
+        self.profiles_by_name = {p["name"]: p for p in self.profiles}
+
         load_frame = ttk.LabelFrame(parent, text="Data")
         load_frame.grid(row=0, column=0, sticky="ew", pady=(0, 8))
         load_frame.columnconfigure(1, weight=1)
@@ -134,6 +140,21 @@ class PowerAnalysisApp:
 
         mode_frame = ttk.Frame(detect_frame)
         mode_frame.grid(row=0, column=0, columnspan=4, sticky="w", padx=2, pady=2)
+        ttk.Label(mode_frame, text="Profile").pack(side="left", padx=(0, 4))
+        self.profile_var = tk.StringVar(
+            value=self.profiles[0]["name"] if self.profiles else ""
+        )
+        self.profile_combo = ttk.Combobox(
+            mode_frame,
+            textvariable=self.profile_var,
+            state="readonly" if self.profiles else "disabled",
+            width=18,
+            values=[p["name"] for p in self.profiles],
+        )
+        self.profile_combo.pack(side="left", padx=(0, 10))
+        if self.profiles:
+            self.profile_combo.bind("<<ComboboxSelected>>", self._on_profile_select)
+
         ttk.Label(mode_frame, text="Mode").pack(side="left")
         self.detect_mode = tk.StringVar(value="threshold")
         for text, key in [
@@ -233,6 +254,9 @@ class PowerAnalysisApp:
         )
         self.event_buttons = []
 
+        if self.profiles:
+            self._apply_profile(self.profiles[0])
+
     def _labeled_entry(self, parent, label, default, row, col):
         frame = ttk.Frame(parent)
         frame.grid(row=row, column=col, padx=2, pady=2, sticky="ew")
@@ -274,6 +298,89 @@ class PowerAnalysisApp:
             except ValueError:
                 # If values are not valid numbers, skip the swap
                 pass
+
+    def _load_profiles(self):
+        """
+        Load detection profiles from profile.json.
+
+        The JSON may be a list or contain a top-level "profiles" list with entries that include:
+        name, mode, threshold1, threshold2, min_len/min_length, max_len/max_length.
+        """
+        path = os.path.join(os.getcwd(), "profile.json")
+        if not os.path.exists(path):
+            return []
+        try:
+            with open(path, "r", encoding="utf-8") as f:
+                raw = json.load(f)
+        except Exception as exc:
+            print(f"Failed to read profile.json: {exc}")
+            return []
+
+        if isinstance(raw, dict) and "profiles" in raw:
+            raw_profiles = raw.get("profiles", [])
+        elif isinstance(raw, list):
+            raw_profiles = raw
+        else:
+            return []
+
+        profiles = []
+
+        def _as_float(val, default):
+            try:
+                return float(val)
+            except Exception:
+                return default
+
+        for item in raw_profiles:
+            if not isinstance(item, dict):
+                continue
+            name = item.get("name") or item.get("profile_name") or item.get("profile")
+            if not name:
+                continue
+            mode = item.get("mode", "threshold")
+            if mode not in ("threshold", "rising", "falling"):
+                mode = "threshold"
+            profile = {
+                "name": str(name),
+                "mode": mode,
+                "threshold": _as_float(
+                    item.get("threshold1", item.get("threshold", 10.0)), 10.0
+                ),
+                "threshold2": _as_float(item.get("threshold2", 20.0), 20.0),
+                "min_len": _as_float(item.get("min_len", item.get("min_length", 0.0)), 0.0),
+                "max_len": _as_float(item.get("max_len", item.get("max_length", 100.0)), 100.0),
+            }
+            profiles.append(profile)
+
+        return profiles
+
+    def _apply_profile(self, profile):
+        """Populate detection inputs from a profile dictionary."""
+        if not profile:
+            return
+        self.profile_var.set(profile["name"])
+
+        self.threshold_entry.delete(0, tk.END)
+        self.threshold_entry.insert(0, f"{profile['threshold']}")
+
+        # Force enable threshold2 while updating to avoid state issues, then restore correct state.
+        self.threshold2_entry.configure(state="normal")
+        self.threshold2_entry.delete(0, tk.END)
+        self.threshold2_entry.insert(0, f"{profile['threshold2']}")
+
+        self.min_len_entry.delete(0, tk.END)
+        self.min_len_entry.insert(0, f"{profile['min_len']}")
+        self.max_len_entry.delete(0, tk.END)
+        self.max_len_entry.insert(0, f"{profile['max_len']}")
+
+        self.detect_mode.set(profile["mode"])
+        self._on_detect_mode_change()
+
+    def _on_profile_select(self, event=None):
+        selected = self.profile_var.get()
+        profile = self.profiles_by_name.get(selected)
+        if profile:
+            self._apply_profile(profile)
 
     def _load_default_file(self):
         default_path = os.path.join(os.getcwd(), "detection_mode_sample.csv")
