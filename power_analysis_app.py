@@ -417,7 +417,13 @@ class PowerAnalysisApp:
                 raise ValueError("No finite samples found in CSV.")
             self.time = time[mask]
             self.power = power[mask]
-            self.loaded_file_name = os.path.basename(path)
+            # Include parent folder and filename (parentfolder/filename)
+            parent_folder = os.path.basename(os.path.dirname(path))
+            file_name = os.path.basename(path)
+            if parent_folder:
+                self.loaded_file_name = f"{parent_folder}/{file_name}"
+            else:
+                self.loaded_file_name = file_name
             self.file_name_var.set(self.loaded_file_name)
             self._apply_filter()
         except Exception as exc:
@@ -1078,8 +1084,9 @@ class PowerAnalysisApp:
             return
 
         top = tk.Toplevel(self.root)
+        file_name_part = f" - {self.loaded_file_name}" if self.loaded_file_name else ""
         top.title(
-            f"Event zoom {event['start']:.6f}s - {event['end']:.6f}s"
+            f"Event zoom {event['start']:.6f}s - {event['end']:.6f}s{file_name_part}"
         )
         container = ttk.Frame(top)
         container.pack(fill="both", expand=True)
