@@ -7,11 +7,15 @@ import re
 import tkinter as tk
 from tkinter import filedialog, messagebox, ttk
 import csv
+from datetime import datetime
 
 import numpy as np
 from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg
 from matplotlib.figure import Figure
 from matplotlib.widgets import SpanSelector
+
+# Reference date for time-only log timestamp parsing
+LOG_TIME_REFERENCE_DATE = datetime(2000, 1, 1)
 
 
 class PowerAnalysisApp:
@@ -1353,8 +1357,6 @@ class PowerAnalysisApp:
 
     def _parse_log_timestamp(self, time_str, base_time):
         """Parse a timestamp string and return seconds since epoch or float seconds."""
-        from datetime import datetime
-
         # Try parsing as float seconds first
         try:
             return float(time_str)
@@ -1374,8 +1376,12 @@ class PowerAnalysisApp:
                 dt = datetime.strptime(time_str.strip(), fmt)
                 # For time-only formats, we need to handle relative time
                 if fmt.startswith("%H"):
-                    # Use a reference date
-                    dt = dt.replace(year=2000, month=1, day=1)
+                    # Use the reference date constant
+                    dt = dt.replace(
+                        year=LOG_TIME_REFERENCE_DATE.year,
+                        month=LOG_TIME_REFERENCE_DATE.month,
+                        day=LOG_TIME_REFERENCE_DATE.day
+                    )
                 return dt.timestamp()
             except ValueError:
                 continue
@@ -1484,7 +1490,7 @@ class PowerAnalysisApp:
 
         # Try to extract time from the displayed text
         # Format: "[   X.XXXs] original text"
-        time_match = re.match(r'^\[\s*([\d.]+)s\]', line_text)
+        time_match = re.match(r'^\[\s*(-?\d+(?:\.\d+)?)s\]', line_text)
         if time_match:
             try:
                 chart_time = float(time_match.group(1))
