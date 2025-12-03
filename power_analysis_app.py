@@ -3,6 +3,7 @@ import tempfile
 import io
 import ctypes
 import json
+import re
 import tkinter as tk
 from tkinter import filedialog, messagebox, ttk
 import csv
@@ -29,6 +30,12 @@ class PowerAnalysisApp:
 
         # Loaded file name
         self.loaded_file_name = None
+
+        # Log data containers
+        self.log_entries = []  # List of dicts: {time, raw_time_str, text, line_num, has_error, has_warning}
+        self.log_offset = 0.0  # Time offset for log-to-chart sync
+        self.log_file_name = None
+        self.log_marker_line = None  # Vertical line marker on main chart
 
         # Chart objects
         self.preview_line = None
@@ -60,6 +67,7 @@ class PowerAnalysisApp:
         self.root.rowconfigure(0, weight=1)
         self.root.columnconfigure(0, weight=3)
         self.root.columnconfigure(1, weight=2)
+        self.root.columnconfigure(2, weight=2)
 
         chart_frame = ttk.Frame(self.root)
         chart_frame.grid(row=0, column=0, sticky="nsew", padx=6, pady=6)
@@ -70,8 +78,14 @@ class PowerAnalysisApp:
         controls_frame.grid(row=0, column=1, sticky="nsew", padx=6, pady=6)
         controls_frame.columnconfigure(0, weight=1)
 
+        log_frame = ttk.Frame(self.root)
+        log_frame.grid(row=0, column=2, sticky="nsew", padx=6, pady=6)
+        log_frame.rowconfigure(0, weight=1)
+        log_frame.columnconfigure(0, weight=1)
+
         self._build_chart(chart_frame)
         self._build_controls(controls_frame)
+        self._build_log_viewer(log_frame)
 
     def _build_chart(self, parent):
         fig = Figure(figsize=(8, 6), dpi=100, constrained_layout=True)
@@ -265,6 +279,95 @@ class PowerAnalysisApp:
         entry.insert(0, default)
         entry.pack(fill="x")
         return entry
+
+    def _build_log_viewer(self, parent):
+        """Build the log viewer panel with load, search, filter, and display controls."""
+        parent.rowconfigure(1, weight=1)
+        parent.columnconfigure(0, weight=1)
+
+        # Log controls frame
+        log_controls = ttk.LabelFrame(parent, text="Log Viewer")
+        log_controls.grid(row=0, column=0, sticky="ew", pady=(0, 4))
+        log_controls.columnconfigure(1, weight=1)
+
+        # Row 0: Load log button and file name
+        ttk.Button(log_controls, text="Load Log", command=self._prompt_load_log).grid(
+            row=0, column=0, padx=4, pady=4, sticky="w"
+        )
+        self.log_file_var = tk.StringVar(value="No log loaded")
+        ttk.Label(log_controls, textvariable=self.log_file_var).grid(
+            row=0, column=1, columnspan=3, padx=4, pady=4, sticky="w"
+        )
+
+        # Row 1: Time offset input
+        ttk.Label(log_controls, text="Time offset (s):").grid(
+            row=1, column=0, padx=4, pady=2, sticky="w"
+        )
+        self.log_offset_entry = ttk.Entry(log_controls, width=10)
+        self.log_offset_entry.insert(0, "0.0")
+        self.log_offset_entry.grid(row=1, column=1, padx=4, pady=2, sticky="w")
+        ttk.Button(log_controls, text="Apply Offset", command=self._apply_log_offset).grid(
+            row=1, column=2, padx=4, pady=2, sticky="w"
+        )
+
+        # Row 2: Search box
+        ttk.Label(log_controls, text="Search:").grid(
+            row=2, column=0, padx=4, pady=2, sticky="w"
+        )
+        self.log_search_var = tk.StringVar()
+        self.log_search_entry = ttk.Entry(log_controls, textvariable=self.log_search_var)
+        self.log_search_entry.grid(row=2, column=1, columnspan=2, padx=4, pady=2, sticky="ew")
+        self.log_search_entry.bind("<Return>", lambda e: self._filter_log())
+        ttk.Button(log_controls, text="Search", command=self._filter_log).grid(
+            row=2, column=3, padx=4, pady=2, sticky="w"
+        )
+
+        # Row 3: Filter buttons
+        filter_frame = ttk.Frame(log_controls)
+        filter_frame.grid(row=3, column=0, columnspan=4, padx=4, pady=4, sticky="ew")
+        self.log_filter_mode = tk.StringVar(value="all")
+        ttk.Radiobutton(filter_frame, text="Show All", value="all",
+                        variable=self.log_filter_mode, command=self._filter_log).pack(side="left", padx=2)
+        ttk.Radiobutton(filter_frame, text="Errors Only", value="errors",
+                        variable=self.log_filter_mode, command=self._filter_log).pack(side="left", padx=2)
+        ttk.Radiobutton(filter_frame, text="Warnings+", value="warnings",
+                        variable=self.log_filter_mode, command=self._filter_log).pack(side="left", padx=2)
+
+        # Row 4: Chart range filter checkbox
+        self.log_chart_filter_var = tk.BooleanVar(value=False)
+        ttk.Checkbutton(log_controls, text="Filter by chart selection",
+                        variable=self.log_chart_filter_var,
+                        command=self._filter_log).grid(row=4, column=0, columnspan=4, padx=4, pady=2, sticky="w")
+
+        # Log text display with scrollbar
+        log_display_frame = ttk.Frame(parent)
+        log_display_frame.grid(row=1, column=0, sticky="nsew")
+        log_display_frame.rowconfigure(0, weight=1)
+        log_display_frame.columnconfigure(0, weight=1)
+
+        self.log_text = tk.Text(log_display_frame, wrap="none", width=50, height=20,
+                                state="disabled", font=("Consolas", 9))
+        self.log_text.grid(row=0, column=0, sticky="nsew")
+
+        # Scrollbars
+        log_yscroll = ttk.Scrollbar(log_display_frame, orient="vertical",
+                                     command=self.log_text.yview)
+        log_yscroll.grid(row=0, column=1, sticky="ns")
+        log_xscroll = ttk.Scrollbar(log_display_frame, orient="horizontal",
+                                     command=self.log_text.xview)
+        log_xscroll.grid(row=1, column=0, sticky="ew")
+        self.log_text.configure(yscrollcommand=log_yscroll.set,
+                                xscrollcommand=log_xscroll.set)
+
+        # Configure text tags for highlighting
+        self.log_text.tag_configure("error", foreground="red", font=("Consolas", 9, "bold"))
+        self.log_text.tag_configure("warning", foreground="orange", font=("Consolas", 9, "bold"))
+        self.log_text.tag_configure("fail", foreground="red", font=("Consolas", 9, "bold"))
+        self.log_text.tag_configure("highlight", background="yellow")
+        self.log_text.tag_configure("clickable", foreground="blue", underline=True)
+
+        # Bind click event for log entries
+        self.log_text.bind("<Button-1>", self._on_log_click)
 
     def _on_detect_mode_change(self, *args):
         """Toggle threshold2_entry state based on detection mode.
@@ -1156,6 +1259,289 @@ class PowerAnalysisApp:
         ttk.Button(actions, text="Copy stats", command=copy_stats).pack(
             side="left", padx=4, pady=2
         )
+
+    # ==================== LOG VIEWER METHODS ====================
+
+    def _prompt_load_log(self):
+        """Open file dialog to select a log file."""
+        path = filedialog.askopenfilename(
+            title="Select Log file",
+            filetypes=[("Log files", "*.log"), ("Text files", "*.txt"), ("All files", "*.*")],
+        )
+        if path:
+            self._load_log(path)
+
+    def _load_log(self, path):
+        """Load and parse a TeraTerm format log file."""
+        try:
+            with open(path, "r", encoding="utf-8", errors="replace") as f:
+                lines = f.readlines()
+        except Exception as exc:
+            messagebox.showerror("Error", f"Failed to load log file: {exc}")
+            return
+
+        self.log_entries = []
+        # TeraTerm timestamp patterns:
+        # [YYYY-MM-DD HH:MM:SS.mmm] or [HH:MM:SS.mmm] or timestamps at start
+        timestamp_patterns = [
+            # Pattern 1: [YYYY-MM-DD HH:MM:SS.mmm]
+            r'^\[(\d{4}-\d{2}-\d{2}\s+\d{2}:\d{2}:\d{2}(?:\.\d+)?)\]',
+            # Pattern 2: [HH:MM:SS.mmm]
+            r'^\[(\d{2}:\d{2}:\d{2}(?:\.\d+)?)\]',
+            # Pattern 3: YYYY-MM-DD HH:MM:SS.mmm at start
+            r'^(\d{4}-\d{2}-\d{2}\s+\d{2}:\d{2}:\d{2}(?:\.\d+)?)',
+            # Pattern 4: HH:MM:SS.mmm at start
+            r'^(\d{2}:\d{2}:\d{2}(?:\.\d+)?)',
+            # Pattern 5: Seconds from start (float)
+            r'^\s*(\d+\.\d+)\s',
+        ]
+
+        # Keywords for highlighting
+        error_keywords = ['error', 'fail', 'failed', 'failure', 'fatal', 'critical', 'exception']
+        warning_keywords = ['warning', 'warn', 'caution', 'alert']
+
+        base_time = None
+        for line_num, line in enumerate(lines, start=1):
+            line = line.rstrip('\n\r')
+            if not line.strip():
+                continue
+
+            time_val = None
+            raw_time_str = ""
+
+            # Try each timestamp pattern
+            for pattern in timestamp_patterns:
+                match = re.match(pattern, line)
+                if match:
+                    raw_time_str = match.group(1)
+                    time_val = self._parse_log_timestamp(raw_time_str, base_time)
+                    if time_val is not None and base_time is None:
+                        base_time = time_val
+                    break
+
+            # Convert absolute time to relative seconds if we have a base
+            if time_val is not None and base_time is not None:
+                time_seconds = time_val - base_time
+            else:
+                time_seconds = None
+
+            # Check for error/warning keywords
+            lower_line = line.lower()
+            has_error = any(kw in lower_line for kw in error_keywords)
+            has_warning = any(kw in lower_line for kw in warning_keywords)
+
+            entry = {
+                "time": time_seconds,
+                "raw_time_str": raw_time_str,
+                "text": line,
+                "line_num": line_num,
+                "has_error": has_error,
+                "has_warning": has_warning,
+            }
+            self.log_entries.append(entry)
+
+        # Update UI
+        parent_folder = os.path.basename(os.path.dirname(path))
+        file_name = os.path.basename(path)
+        if parent_folder:
+            self.log_file_name = f"{parent_folder}/{file_name}"
+        else:
+            self.log_file_name = file_name
+        self.log_file_var.set(f"{self.log_file_name} ({len(self.log_entries)} lines)")
+
+        self._display_log_entries()
+
+    def _parse_log_timestamp(self, time_str, base_time):
+        """Parse a timestamp string and return seconds since epoch or float seconds."""
+        from datetime import datetime
+
+        # Try parsing as float seconds first
+        try:
+            return float(time_str)
+        except ValueError:
+            pass
+
+        # Try various datetime formats
+        formats = [
+            "%Y-%m-%d %H:%M:%S.%f",
+            "%Y-%m-%d %H:%M:%S",
+            "%H:%M:%S.%f",
+            "%H:%M:%S",
+        ]
+
+        for fmt in formats:
+            try:
+                dt = datetime.strptime(time_str.strip(), fmt)
+                # For time-only formats, we need to handle relative time
+                if fmt.startswith("%H"):
+                    # Use a reference date
+                    dt = dt.replace(year=2000, month=1, day=1)
+                return dt.timestamp()
+            except ValueError:
+                continue
+
+        return None
+
+    def _apply_log_offset(self):
+        """Apply time offset to log entries for synchronization with chart."""
+        try:
+            self.log_offset = float(self.log_offset_entry.get())
+        except ValueError:
+            messagebox.showerror("Error", "Invalid time offset value.")
+            return
+        self._display_log_entries()
+
+    def _filter_log(self):
+        """Filter and display log entries based on current filter settings."""
+        self._display_log_entries()
+
+    def _display_log_entries(self):
+        """Display log entries with highlighting in the text widget."""
+        self.log_text.configure(state="normal")
+        self.log_text.delete("1.0", tk.END)
+
+        if not self.log_entries:
+            self.log_text.insert(tk.END, "No log entries loaded.")
+            self.log_text.configure(state="disabled")
+            return
+
+        search_term = self.log_search_var.get().lower().strip()
+        filter_mode = self.log_filter_mode.get()
+        filter_by_chart = self.log_chart_filter_var.get()
+
+        # Get chart time range if filtering by chart
+        chart_start, chart_end = None, None
+        if filter_by_chart and self.selected_range is not None:
+            chart_start, chart_end = self.selected_range
+
+        for entry in self.log_entries:
+            # Apply filter mode
+            if filter_mode == "errors" and not entry["has_error"]:
+                continue
+            if filter_mode == "warnings" and not (entry["has_error"] or entry["has_warning"]):
+                continue
+
+            # Apply search filter
+            if search_term and search_term not in entry["text"].lower():
+                continue
+
+            # Apply chart time range filter
+            if filter_by_chart and chart_start is not None and chart_end is not None:
+                if entry["time"] is not None:
+                    adjusted_time = entry["time"] + self.log_offset
+                    if adjusted_time < chart_start or adjusted_time > chart_end:
+                        continue
+
+            # Insert the line
+            line_start = self.log_text.index(tk.END)
+            display_text = entry["text"]
+
+            # Add time info if available
+            if entry["time"] is not None:
+                adjusted_time = entry["time"] + self.log_offset
+                display_text = f"[{adjusted_time:10.3f}s] {entry['text']}"
+
+            self.log_text.insert(tk.END, display_text + "\n")
+
+            # Apply highlighting tags
+            line_end = self.log_text.index(tk.END + "-1c")
+
+            if entry["has_error"]:
+                self.log_text.tag_add("error", line_start, line_end)
+            elif entry["has_warning"]:
+                self.log_text.tag_add("warning", line_start, line_end)
+
+            # Highlight search term
+            if search_term:
+                self._highlight_search_term(line_start, line_end, search_term)
+
+        self.log_text.configure(state="disabled")
+
+    def _highlight_search_term(self, line_start, line_end, search_term):
+        """Highlight search term occurrences in a line."""
+        start = line_start
+        while True:
+            pos = self.log_text.search(search_term, start, line_end, nocase=True)
+            if not pos:
+                break
+            end_pos = f"{pos}+{len(search_term)}c"
+            self.log_text.tag_add("highlight", pos, end_pos)
+            start = end_pos
+
+    def _on_log_click(self, event):
+        """Handle click on log entry to show marker in main chart."""
+        if not self.log_entries:
+            return
+
+        # Get the line number clicked
+        index = self.log_text.index(f"@{event.x},{event.y}")
+        line_num = int(index.split(".")[0])
+
+        # Get the text of that line
+        line_start = f"{line_num}.0"
+        line_end = f"{line_num}.end"
+        line_text = self.log_text.get(line_start, line_end)
+
+        # Try to extract time from the displayed text
+        # Format: "[   X.XXXs] original text"
+        time_match = re.match(r'^\[\s*([\d.]+)s\]', line_text)
+        if time_match:
+            try:
+                chart_time = float(time_match.group(1))
+                self._show_log_marker(chart_time)
+            except ValueError:
+                pass
+
+    def _show_log_marker(self, time_val):
+        """Show a vertical marker on the main chart at the specified time."""
+        if self.time.size == 0:
+            return
+
+        # Remove existing marker
+        if self.log_marker_line is not None:
+            try:
+                self.log_marker_line.remove()
+            except Exception:
+                pass
+            self.log_marker_line = None
+
+        # Check if time is within chart range
+        if time_val < self.time[0] or time_val > self.time[-1]:
+            messagebox.showinfo("Info", f"Time {time_val:.3f}s is outside chart range "
+                               f"({self.time[0]:.3f}s - {self.time[-1]:.3f}s)")
+            return
+
+        # Add marker line
+        self.log_marker_line = self.ax_main.axvline(
+            time_val, color="purple", linestyle="-", lw=2, alpha=0.8, label="Log marker"
+        )
+
+        # Center view on marker if outside current view
+        if self.selected_range is not None:
+            lo, hi = self.selected_range
+            if time_val < lo or time_val > hi:
+                # Adjust view to center on marker
+                span = hi - lo
+                new_lo = time_val - span / 2
+                new_hi = time_val + span / 2
+                # Clamp to data bounds
+                new_lo = max(self.time[0], new_lo)
+                new_hi = min(self.time[-1], new_hi)
+                self.selected_range = (new_lo, new_hi)
+                self.ax_main.set_xlim(new_lo, new_hi)
+                self._autoscale_main_y()
+
+        self.canvas.draw_idle()
+
+    def _clear_log_marker(self):
+        """Clear the log marker from the main chart."""
+        if self.log_marker_line is not None:
+            try:
+                self.log_marker_line.remove()
+            except Exception:
+                pass
+            self.log_marker_line = None
+            self.canvas.draw_idle()
 
 
 def main():
