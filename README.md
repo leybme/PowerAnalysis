@@ -45,11 +45,15 @@ Use the Data panel `Max events` input to cap detected events per run.
 
 ## Log Viewer
 
-The application includes an integrated log viewer panel for analyzing TeraTerm format log files alongside power data.
+The application includes a log viewer in a separate window for analyzing TeraTerm format log files alongside power data.
+
+### Opening the Log Viewer
+
+Click **Open Log Viewer** in the Data section to open the log viewer window.
 
 ### Loading logs
 
-Click **Load Log** to open a log file. Supported formats:
+Click **Load Log** in the log viewer window to open a log file. Supported formats:
 - TeraTerm logs with timestamps: `[YYYY-MM-DD HH:MM:SS.mmm]` or `[HH:MM:SS.mmm]`
 - Plain timestamps at line start
 - Numeric second-based timestamps

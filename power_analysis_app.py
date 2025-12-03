@@ -71,7 +71,6 @@ class PowerAnalysisApp:
         self.root.rowconfigure(0, weight=1)
         self.root.columnconfigure(0, weight=3)
         self.root.columnconfigure(1, weight=2)
-        self.root.columnconfigure(2, weight=2)
 
         chart_frame = ttk.Frame(self.root)
         chart_frame.grid(row=0, column=0, sticky="nsew", padx=6, pady=6)
@@ -82,14 +81,11 @@ class PowerAnalysisApp:
         controls_frame.grid(row=0, column=1, sticky="nsew", padx=6, pady=6)
         controls_frame.columnconfigure(0, weight=1)
 
-        log_frame = ttk.Frame(self.root)
-        log_frame.grid(row=0, column=2, sticky="nsew", padx=6, pady=6)
-        log_frame.rowconfigure(0, weight=1)
-        log_frame.columnconfigure(0, weight=1)
-
         self._build_chart(chart_frame)
         self._build_controls(controls_frame)
-        self._build_log_viewer(log_frame)
+
+        # Log viewer window reference (created on demand)
+        self.log_viewer_window = None
 
     def _build_chart(self, parent):
         fig = Figure(figsize=(8, 6), dpi=100, constrained_layout=True)
@@ -131,25 +127,28 @@ class PowerAnalysisApp:
         ttk.Button(load_frame, text="Load CSV", command=self._prompt_load).grid(
             row=0, column=0, padx=(4, 4), pady=4, sticky="w"
         )
+        ttk.Button(load_frame, text="Open Log Viewer", command=self._open_log_viewer_window).grid(
+            row=0, column=1, padx=(4, 4), pady=4, sticky="w"
+        )
         self.file_name_var = tk.StringVar(value="")
         ttk.Label(load_frame, textvariable=self.file_name_var).grid(
-            row=1, column=0, columnspan=6, padx=(4, 4), pady=(0, 4), sticky="w"
+            row=1, column=0, columnspan=7, padx=(4, 4), pady=(0, 4), sticky="w"
         )
         ttk.Label(load_frame, text="Avg window (samples)").grid(
-            row=0, column=1, padx=4, pady=4, sticky="e"
+            row=0, column=2, padx=4, pady=4, sticky="e"
         )
         self.filter_entry = ttk.Entry(load_frame, width=8)
         self.filter_entry.insert(0, "25")
-        self.filter_entry.grid(row=0, column=2, padx=4, pady=4, sticky="w")
+        self.filter_entry.grid(row=0, column=3, padx=4, pady=4, sticky="w")
         ttk.Button(load_frame, text="Apply Filter", command=self._apply_filter).grid(
-            row=0, column=3, padx=4, pady=4, sticky="e"
+            row=0, column=4, padx=4, pady=4, sticky="e"
         )
         ttk.Label(load_frame, text="Max events").grid(
-            row=0, column=4, padx=4, pady=4, sticky="e"
+            row=0, column=5, padx=4, pady=4, sticky="e"
         )
         self.max_events_entry = ttk.Entry(load_frame, width=6)
         self.max_events_entry.insert(0, "20")
-        self.max_events_entry.grid(row=0, column=5, padx=4, pady=4, sticky="w")
+        self.max_events_entry.grid(row=0, column=6, padx=4, pady=4, sticky="w")
 
         detect_frame = ttk.LabelFrame(parent, text="Event detection")
         detect_frame.grid(row=1, column=0, sticky="ew", pady=(0, 8))
@@ -284,14 +283,24 @@ class PowerAnalysisApp:
         entry.pack(fill="x")
         return entry
 
-    def _build_log_viewer(self, parent):
-        """Build the log viewer panel with load, search, filter, and display controls."""
-        parent.rowconfigure(1, weight=1)
-        parent.columnconfigure(0, weight=1)
+    def _open_log_viewer_window(self):
+        """Open the log viewer in a new window."""
+        # If window already exists, bring it to front
+        if self.log_viewer_window is not None and self.log_viewer_window.winfo_exists():
+            self.log_viewer_window.lift()
+            self.log_viewer_window.focus_force()
+            return
+
+        # Create new window
+        self.log_viewer_window = tk.Toplevel(self.root)
+        self.log_viewer_window.title("Log Viewer")
+        self.log_viewer_window.geometry("700x600")
+        self.log_viewer_window.rowconfigure(1, weight=1)
+        self.log_viewer_window.columnconfigure(0, weight=1)
 
         # Log controls frame
-        log_controls = ttk.LabelFrame(parent, text="Log Viewer")
-        log_controls.grid(row=0, column=0, sticky="ew", pady=(0, 4))
+        log_controls = ttk.LabelFrame(self.log_viewer_window, text="Log Controls")
+        log_controls.grid(row=0, column=0, sticky="ew", padx=6, pady=6)
         log_controls.columnconfigure(1, weight=1)
 
         # Row 0: Load log button and file name
@@ -344,12 +353,12 @@ class PowerAnalysisApp:
                         command=self._filter_log).grid(row=4, column=0, columnspan=4, padx=4, pady=2, sticky="w")
 
         # Log text display with scrollbar
-        log_display_frame = ttk.Frame(parent)
-        log_display_frame.grid(row=1, column=0, sticky="nsew")
+        log_display_frame = ttk.Frame(self.log_viewer_window)
+        log_display_frame.grid(row=1, column=0, sticky="nsew", padx=6, pady=(0, 6))
         log_display_frame.rowconfigure(0, weight=1)
         log_display_frame.columnconfigure(0, weight=1)
 
-        self.log_text = tk.Text(log_display_frame, wrap="none", width=50, height=20,
+        self.log_text = tk.Text(log_display_frame, wrap="none", width=80, height=30,
                                 state="disabled", font=("Consolas", 9))
         self.log_text.grid(row=0, column=0, sticky="nsew")
 
@@ -372,6 +381,10 @@ class PowerAnalysisApp:
 
         # Bind click event for log entries
         self.log_text.bind("<Button-1>", self._on_log_click)
+
+        # If log entries were already loaded, display them
+        if self.log_entries:
+            self._display_log_entries()
 
     def _on_detect_mode_change(self, *args):
         """Toggle threshold2_entry state based on detection mode.
@@ -1390,6 +1403,9 @@ class PowerAnalysisApp:
 
     def _apply_log_offset(self):
         """Apply time offset to log entries for synchronization with chart."""
+        # Check if log viewer window is open
+        if self.log_viewer_window is None or not self.log_viewer_window.winfo_exists():
+            return
         try:
             self.log_offset = float(self.log_offset_entry.get())
         except ValueError:
@@ -1403,6 +1419,10 @@ class PowerAnalysisApp:
 
     def _display_log_entries(self):
         """Display log entries with highlighting in the text widget."""
+        # Check if log viewer window is open
+        if self.log_viewer_window is None or not self.log_viewer_window.winfo_exists():
+            return
+
         self.log_text.configure(state="normal")
         self.log_text.delete("1.0", tk.END)
 
