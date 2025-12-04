@@ -16,3 +16,6 @@ venv/
 .idea/
 .vscode/
 *.swp
+
+# Screenshots generated during testing
+screenshot_*.png

@@ -1,0 +1,21 @@
+[2024-01-15 10:30:00.000] System starting up
+[2024-01-15 10:30:00.500] Initializing power measurement module
+[2024-01-15 10:30:01.000] WARNING: Calibration data not found, using defaults
+[2024-01-15 10:30:01.500] Loading device configuration
+[2024-01-15 10:30:02.000] Device connected successfully
+[2024-01-15 10:30:02.500] Starting power measurement
+[2024-01-15 10:30:03.000] Power reading: 15.2 mW
+[2024-01-15 10:30:03.500] Power reading: 18.7 mW
+[2024-01-15 10:30:04.000] ERROR: Unexpected spike detected
+[2024-01-15 10:30:04.500] Power reading: 45.3 mW
+[2024-01-15 10:30:05.000] Power reading: 42.1 mW
+[2024-01-15 10:30:05.500] WARNING: Power consumption above threshold
+[2024-01-15 10:30:06.000] Power reading: 38.9 mW
+[2024-01-15 10:30:06.500] FAIL: Connection timeout to sensor
+[2024-01-15 10:30:07.000] Reconnecting to sensor...
+[2024-01-15 10:30:07.500] Sensor reconnected
+[2024-01-15 10:30:08.000] Power reading: 22.4 mW
+[2024-01-15 10:30:08.500] Power reading: 19.8 mW
+[2024-01-15 10:30:09.000] Power reading: 16.2 mW
+[2024-01-15 10:30:09.500] Measurement cycle complete
+[2024-01-15 10:30:10.000] System idle
