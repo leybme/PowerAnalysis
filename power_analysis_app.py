@@ -751,6 +751,8 @@ class PowerAnalysisApp:
         self._autoscale_main_y()
         self._update_stats()
         self.ax_main.figure.canvas.draw_idle()
+        # Auto-update log viewer if auto filter by chart selection is enabled
+        self._update_log_if_auto_filter()
 
     def _on_canvas_click(self, event):
         # Right-click on the overview resets selection to full range.
@@ -764,6 +766,16 @@ class PowerAnalysisApp:
         self._autoscale_main_y()
         self._update_stats()
         self.canvas.draw_idle()
+        # Auto-update log viewer if auto filter by chart selection is enabled
+        self._update_log_if_auto_filter()
+
+    def _update_log_if_auto_filter(self):
+        """Update log viewer if auto filter by chart selection is enabled."""
+        if (self.log_viewer_window is not None and 
+            self.log_viewer_window.winfo_exists() and
+            hasattr(self, 'log_chart_filter_var') and
+            self.log_chart_filter_var.get()):
+            self._display_log_entries()
 
     def _clear_preview_selection(self):
         if self.span_selector:
@@ -1496,7 +1508,7 @@ class PowerAnalysisApp:
                         continue
 
             # Insert the line
-            line_start = self.log_text.index(tk.END)
+            line_start = self.log_text.index("end-1c")  # Get the end position before the implicit newline
             display_text = entry["text"]
 
             # Add time info if available
@@ -1506,8 +1518,8 @@ class PowerAnalysisApp:
 
             self.log_text.insert(tk.END, display_text + "\n")
 
-            # Apply highlighting tags
-            line_end = self.log_text.index(tk.END + "-1c")
+            # Apply highlighting tags - calculate the actual line range
+            line_end = self.log_text.index("end-2c")  # -2c to exclude the trailing newline
             lower_text = entry["text"].lower()
 
             # Apply custom keyword highlighting (check first, so error/warning can override if needed)
