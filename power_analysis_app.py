@@ -348,9 +348,38 @@ class PowerAnalysisApp:
 
         # Row 4: Chart range filter checkbox
         self.log_chart_filter_var = tk.BooleanVar(value=False)
-        ttk.Checkbutton(log_controls, text="Filter by chart selection",
+        ttk.Checkbutton(log_controls, text="Auto filter by chart selection",
                         variable=self.log_chart_filter_var,
                         command=self._filter_log).grid(row=4, column=0, columnspan=4, padx=4, pady=2, sticky="w")
+
+        # Row 5: Custom keyword highlighting
+        keyword_frame = ttk.LabelFrame(log_controls, text="Custom Keyword Highlighting")
+        keyword_frame.grid(row=5, column=0, columnspan=4, padx=4, pady=4, sticky="ew")
+        keyword_frame.columnconfigure(1, weight=1)
+        keyword_frame.columnconfigure(3, weight=1)
+        keyword_frame.columnconfigure(5, weight=1)
+
+        # Blue keywords
+        ttk.Label(keyword_frame, text="Blue:", foreground="blue").grid(row=0, column=0, padx=2, pady=2, sticky="w")
+        self.log_blue_keywords_var = tk.StringVar()
+        ttk.Entry(keyword_frame, textvariable=self.log_blue_keywords_var, width=15).grid(
+            row=0, column=1, padx=2, pady=2, sticky="ew")
+
+        # Green keywords
+        ttk.Label(keyword_frame, text="Green:", foreground="green").grid(row=0, column=2, padx=2, pady=2, sticky="w")
+        self.log_green_keywords_var = tk.StringVar()
+        ttk.Entry(keyword_frame, textvariable=self.log_green_keywords_var, width=15).grid(
+            row=0, column=3, padx=2, pady=2, sticky="ew")
+
+        # Magenta keywords
+        ttk.Label(keyword_frame, text="Magenta:", foreground="magenta").grid(row=0, column=4, padx=2, pady=2, sticky="w")
+        self.log_magenta_keywords_var = tk.StringVar()
+        ttk.Entry(keyword_frame, textvariable=self.log_magenta_keywords_var, width=15).grid(
+            row=0, column=5, padx=2, pady=2, sticky="ew")
+
+        # Apply button for custom keywords
+        ttk.Button(keyword_frame, text="Apply", command=self._filter_log).grid(
+            row=0, column=6, padx=4, pady=2, sticky="w")
 
         # Log text display with scrollbar
         log_display_frame = ttk.Frame(self.log_viewer_window)
@@ -374,10 +403,13 @@ class PowerAnalysisApp:
 
         # Configure text tags for highlighting
         self.log_text.tag_configure("error", foreground="red", font=("Consolas", 9, "bold"))
-        self.log_text.tag_configure("warning", foreground="orange", font=("Consolas", 9, "bold"))
+        self.log_text.tag_configure("warning", foreground="#DAA520", font=("Consolas", 9, "bold"))  # Yellow/goldenrod
         self.log_text.tag_configure("fail", foreground="red", font=("Consolas", 9, "bold"))
         self.log_text.tag_configure("highlight", background="yellow")
         self.log_text.tag_configure("clickable", foreground="blue", underline=True)
+        self.log_text.tag_configure("custom_blue", foreground="blue", font=("Consolas", 9, "bold"))
+        self.log_text.tag_configure("custom_green", foreground="green", font=("Consolas", 9, "bold"))
+        self.log_text.tag_configure("custom_magenta", foreground="magenta", font=("Consolas", 9, "bold"))
 
         # Bind click event for log entries
         self.log_text.bind("<Button-1>", self._on_log_click)
@@ -1435,6 +1467,11 @@ class PowerAnalysisApp:
         filter_mode = self.log_filter_mode.get()
         filter_by_chart = self.log_chart_filter_var.get()
 
+        # Get custom keywords
+        blue_keywords = [k.strip().lower() for k in self.log_blue_keywords_var.get().split(",") if k.strip()]
+        green_keywords = [k.strip().lower() for k in self.log_green_keywords_var.get().split(",") if k.strip()]
+        magenta_keywords = [k.strip().lower() for k in self.log_magenta_keywords_var.get().split(",") if k.strip()]
+
         # Get chart time range if filtering by chart
         chart_start, chart_end = None, None
         if filter_by_chart and self.selected_range is not None:
@@ -1471,7 +1508,29 @@ class PowerAnalysisApp:
 
             # Apply highlighting tags
             line_end = self.log_text.index(tk.END + "-1c")
+            lower_text = entry["text"].lower()
 
+            # Apply custom keyword highlighting (check first, so error/warning can override if needed)
+            has_custom_highlight = False
+            for kw in blue_keywords:
+                if kw in lower_text:
+                    self.log_text.tag_add("custom_blue", line_start, line_end)
+                    has_custom_highlight = True
+                    break
+            if not has_custom_highlight:
+                for kw in green_keywords:
+                    if kw in lower_text:
+                        self.log_text.tag_add("custom_green", line_start, line_end)
+                        has_custom_highlight = True
+                        break
+            if not has_custom_highlight:
+                for kw in magenta_keywords:
+                    if kw in lower_text:
+                        self.log_text.tag_add("custom_magenta", line_start, line_end)
+                        has_custom_highlight = True
+                        break
+
+            # Error/warning highlighting takes priority
             if entry["has_error"]:
                 self.log_text.tag_add("error", line_start, line_end)
             elif entry["has_warning"]:

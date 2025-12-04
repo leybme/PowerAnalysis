@@ -62,7 +62,16 @@ Click **Load Log** in the log viewer window to open a log file. Supported format
 
 Log entries are automatically highlighted based on keywords:
 - **Red (Error)**: Lines containing `error`, `fail`, `failed`, `failure`, `fatal`, `critical`, `exception`
-- **Orange (Warning)**: Lines containing `warning`, `warn`, `caution`, `alert`
+- **Yellow (Warning)**: Lines containing `warning`, `warn`, `caution`, `alert`
+
+### Custom keyword highlighting
+
+You can define custom keywords to highlight in additional colors:
+- **Blue**: Enter comma-separated keywords in the Blue field
+- **Green**: Enter comma-separated keywords in the Green field  
+- **Magenta**: Enter comma-separated keywords in the Magenta field
+
+Click **Apply** to update the highlighting. Error and warning highlighting takes priority over custom colors.
 
 ### Time synchronization
 
@@ -76,7 +85,7 @@ Use the **Time offset (s)** field to synchronize log timestamps with the power c
 - **Show All**: Display all log entries
 - **Errors Only**: Show only entries with error keywords
 - **Warnings+**: Show entries with warning or error keywords
-- **Filter by chart selection**: Only show log entries within the current chart time range
+- **Auto filter by chart selection**: Only show log entries within the current chart time range
 
 ### Search
 
