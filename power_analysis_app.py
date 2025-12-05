@@ -113,8 +113,11 @@ class PowerAnalysisApp:
         stats_frame.grid(row=1, column=0, sticky="ew", pady=(4, 0))
         stats_frame.columnconfigure(0, weight=1)
         self.stats_var = tk.StringVar(value="Load a CSV file to begin.")
-        ttk.Label(stats_frame, textvariable=self.stats_var).grid(
-            row=0, column=0, sticky="w"
+        self.stats_label = ttk.Label(stats_frame, textvariable=self.stats_var, cursor="hand2")
+        self.stats_label.grid(row=0, column=0, sticky="w")
+        self.stats_label.bind("<Button-1>", self._copy_stats_to_clipboard)
+        ttk.Button(stats_frame, text="DFT", command=self._open_dft_window, width=5).grid(
+            row=0, column=1, padx=(8, 0), sticky="e"
         )
 
     def _build_controls(self, parent):
@@ -826,6 +829,111 @@ class PowerAnalysisApp:
             f"Duration: {duration:.6f} s | Energy: {energy_j * 1000:.4f} mJ"
         )
         self.stats_var.set(stats_text)
+
+    def _copy_stats_to_clipboard(self, event=None):
+        """Copy the current stats text to clipboard when clicked."""
+        stats_text = self.stats_var.get()
+        if stats_text and stats_text not in ("Load a CSV file to begin.", "No data loaded.", "No samples in selection."):
+            self.root.clipboard_clear()
+            self.root.clipboard_append(stats_text)
+            # Brief visual feedback - change cursor temporarily
+            original_text = stats_text
+            self.stats_var.set("Copied to clipboard!")
+            self.root.after(800, lambda: self.stats_var.set(original_text))
+
+    def _open_dft_window(self):
+        """Open a DFT (Discrete Fourier Transform) analysis window."""
+        if self.time.size == 0:
+            messagebox.showinfo("Info", "Load data before performing DFT analysis.")
+            return
+
+        # Get selected range data
+        if self.selected_range is None:
+            lo, hi = float(self.time[0]), float(self.time[-1])
+        else:
+            lo, hi = self.selected_range
+
+        mask = (self.time >= lo) & (self.time <= hi)
+        if not np.any(mask):
+            messagebox.showinfo("Info", "No samples in selection for DFT.")
+            return
+
+        t = self.time[mask]
+        p = self.filtered_power[mask]
+
+        if len(p) < 2:
+            messagebox.showinfo("Info", "Need at least 2 samples for DFT.")
+            return
+
+        # Calculate sampling frequency (use first interval for efficiency)
+        dt = t[1] - t[0]
+        if dt <= 0:
+            messagebox.showerror("Error", "Invalid time data for DFT.")
+            return
+        fs = 1.0 / dt
+
+        # Perform FFT
+        n = len(p)
+        # Remove DC component (mean) before FFT
+        p_centered = p - np.mean(p)
+        fft_vals = np.fft.fft(p_centered)
+        fft_freq = np.fft.fftfreq(n, dt)
+
+        # Only keep positive frequencies
+        pos_mask = fft_freq >= 0
+        freqs = fft_freq[pos_mask]
+        # Normalize magnitudes: DC component uses 1/n, other frequencies use 2/n
+        magnitudes = np.abs(fft_vals[pos_mask]) / n
+        magnitudes[1:] *= 2  # Double non-DC components to account for negative frequencies
+
+        # Create DFT window
+        top = tk.Toplevel(self.root)
+        file_name_part = f" - {self.loaded_file_name}" if self.loaded_file_name else ""
+        top.title(f"DFT Analysis ({lo:.3f}s - {hi:.3f}s){file_name_part}")
+        top.geometry("700x500")
+
+        container = ttk.Frame(top)
+        container.pack(fill="both", expand=True, padx=6, pady=6)
+        container.rowconfigure(0, weight=1)
+        container.columnconfigure(0, weight=1)
+
+        # Create figure with frequency spectrum
+        fig = Figure(figsize=(7, 4), dpi=100)
+        ax = fig.add_subplot(111)
+        ax.plot(freqs, magnitudes, color="#1b4f72", lw=1)
+        ax.set_xlabel("Frequency (Hz)")
+        ax.set_ylabel("Magnitude (mW)")
+        ax.set_title("Frequency Spectrum (DFT)")
+        ax.grid(True, linestyle="--", alpha=0.3)
+        ax.set_xlim(0, fs / 2)  # Nyquist frequency
+        fig.tight_layout()
+
+        canvas = FigureCanvasTkAgg(fig, master=container)
+        canvas.draw()
+        canvas.get_tk_widget().grid(row=0, column=0, sticky="nsew")
+
+        # Info frame
+        info_frame = ttk.Frame(container)
+        info_frame.grid(row=1, column=0, sticky="ew", pady=(4, 0))
+
+        # Find dominant frequencies (top 5, excluding DC)
+        # Use relative threshold based on max magnitude
+        top_freqs = []
+        if len(freqs) > 1:
+            max_mag = np.max(magnitudes[1:]) if len(magnitudes) > 1 else 0
+            significance_threshold = max_mag * 0.01  # 1% of max magnitude
+            # Exclude DC (index 0)
+            non_dc_idx = np.argsort(magnitudes[1:])[::-1] + 1
+            for idx in non_dc_idx[:5]:
+                if magnitudes[idx] > significance_threshold:
+                    top_freqs.append((freqs[idx], magnitudes[idx]))
+
+        info_text = f"Sampling freq: {fs:.2f} Hz | Samples: {n} | Duration: {t[-1] - t[0]:.3f} s"
+        if top_freqs:
+            dominant = ", ".join([f"{f:.3f} Hz ({m:.2f} mW)" for f, m in top_freqs[:3]])
+            info_text += f" | Top freq: {dominant}"
+
+        ttk.Label(info_frame, text=info_text).pack(side="left", padx=4)
 
     def _detect_events(self):
         if self.time.size == 0:
