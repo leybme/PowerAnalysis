@@ -905,7 +905,7 @@ class PowerAnalysisApp:
         ax.set_ylabel("Magnitude (mW)")
         ax.set_title("Frequency Spectrum (DFT)")
         ax.grid(True, linestyle="--", alpha=0.3)
-        ax.set_xlim(0, fs / 2)  # Nyquist frequency
+        ax.set_xlim(0, fs / 10)  # 1/10 of sampling frequency
         fig.tight_layout()
 
         canvas = FigureCanvasTkAgg(fig, master=container)
