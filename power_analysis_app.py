@@ -80,6 +80,7 @@ class PowerAnalysisApp:
         controls_frame = ttk.Frame(self.root)
         controls_frame.grid(row=0, column=1, sticky="nsew", padx=6, pady=6)
         controls_frame.columnconfigure(0, weight=1)
+        controls_frame.rowconfigure(2, weight=1)  # Allow events_frame to expand
 
         self._build_chart(chart_frame)
         self._build_controls(controls_frame)
@@ -818,7 +819,7 @@ class PowerAnalysisApp:
         t = self.time[mask]
         p = self.filtered_power[mask]
         duration = t[-1] - t[0]
-        energy_j = float(np.trapz(p / 1000.0, t))
+        energy_j = float(np.trapezoid(p / 1000.0, t))
         stats_text = (
             f"Samples: {p.size} | Mean: {np.mean(p):.2f} mW | "
             f"Max: {np.max(p):.2f} mW | Min: {np.min(p):.2f} mW | "
@@ -971,7 +972,7 @@ class PowerAnalysisApp:
         avg_power = float(np.mean(clean_power))
         max_power = float(np.max(clean_power))
         min_power = float(np.min(clean_power))
-        energy_j = float(np.trapz(clean_power / 1000.0, t_slice))
+        energy_j = float(np.trapezoid(clean_power / 1000.0, t_slice))
         return {
             "start": self.time[start_idx],
             "end": self.time[end_idx],
